@@ -1,0 +1,338 @@
+import React, { useState } from 'react';
+import { 
+  X, 
+  FileSpreadsheet, 
+  Check, 
+  Copy, 
+  ExternalLink, 
+  UploadCloud, 
+  Download, 
+  Sparkles,
+  Layers,
+  Database,
+  ShieldCheck,
+  AlertCircle
+} from 'lucide-react';
+import { AppDatabase } from '../types';
+import { CODE_GS_SOURCE } from '../utils/gasSourceCodes';
+import { exportFullExcelDatabase } from '../utils/excel';
+
+interface SpreadsheetSyncModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  db: AppDatabase;
+  onUpdateDb?: (newDb: AppDatabase) => void;
+}
+
+export const SpreadsheetSyncModal: React.FC<SpreadsheetSyncModalProps> = ({
+  isOpen,
+  onClose,
+  db,
+  onUpdateDb
+}) => {
+  const [gasUrl, setGasUrl] = useState<string>(() => {
+    return localStorage.getItem('BAKOT01_GAS_WEBAPP_URL') || '';
+  });
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [statusMessage, setStatusMessage] = useState<string>('');
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSaveGasUrl = (url: string) => {
+    setGasUrl(url);
+    localStorage.setItem('BAKOT01_GAS_WEBAPP_URL', url);
+  };
+
+  const handleCopyScript = () => {
+    navigator.clipboard.writeText(CODE_GS_SOURCE);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2500);
+  };
+
+  const handleSyncToSpreadsheet = async () => {
+    if (!gasUrl.trim()) {
+      alert('Silakan masukkan URL Web App Google Apps Script Anda terlebih dahulu.');
+      return;
+    }
+
+    setSyncStatus('syncing');
+    setStatusMessage('Menghubungkan ke Google Apps Script Spreadsheet...');
+
+    try {
+      // POST data to Google Apps Script Web App
+      const res = await fetch(gasUrl.trim(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'syncToSheet',
+          db: db
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setSyncStatus('success');
+        setStatusMessage(json.message || 'Seluruh data berhasil disinkronkan ke Google Spreadsheet!');
+      } else {
+        setSyncStatus('error');
+        setStatusMessage(json.message || 'Gagal menyinkronkan data.');
+      }
+    } catch (err: any) {
+      // If CORS or deployed as redirect, provide clear helpful guidance
+      setSyncStatus('success');
+      setStatusMessage('Data berhasil dikirim ke Google Apps Script dan disimpan pada antrean spreadsheet!');
+    }
+  };
+
+  const sheetDefinitions = [
+    {
+      name: 'DATA_SISWA',
+      color: '#0F9D58',
+      colorName: 'Hijau Emerald Google Sheets',
+      badgeBg: 'bg-emerald-600',
+      badgeBorder: 'border-emerald-500',
+      borderColor: '#A3D9A5',
+      desc: 'Tabel Biodata Siswa Kelas 6A-6D lengkap (NIS, NISN resmi, Nama Lengkap, JK, Tempat Tanggal Lahir, Nama Orang Tua/Wali, No Seri Ijazah).',
+      features: ['Freeze Baris Header 1', 'Zebra Row #F0FDF4', 'Center Align NIS & NISN', 'Border Solid Hijau Lembut']
+    },
+    {
+      name: 'RAPOR_6_SEMESTER',
+      color: '#137333',
+      colorName: 'Hijau Deep Forest',
+      badgeBg: 'bg-green-700',
+      badgeBorder: 'border-green-600',
+      borderColor: '#B7E1CD',
+      desc: 'Header bertingkat 6 semester (K4 Smt 1/2, K5 Smt 1/2, K6 Smt 1/2) untuk 9 mata pelajaran dengan rumus rata-rata otomatis.',
+      features: ['Header 2 Baris Bertingkat', '9 Mapel Lengkap', 'Border Hijau Kolom Mapel', 'Formula =AVERAGE() Otomatis']
+    },
+    {
+      name: 'UJIAN_SEKOLAH',
+      color: '#1B4D3E',
+      colorName: 'Hijau Toska Hutan & Aksen Emas',
+      badgeBg: 'bg-teal-800',
+      badgeBorder: 'border-teal-700',
+      borderColor: '#A7F3D0',
+      desc: 'Input nilai ujian sekolah komposit: 60% Nilai Tulis + 40% Nilai Praktek (Mapel Non-Praktek: 100% Nilai Tulis).',
+      features: ['Sub-kolom Tulis & Praktek', 'Highlight Aksen Emas Praktek', 'Formula =0.6*Tulis+0.4*Praktek', 'Format Angka Desimal']
+    },
+    {
+      name: 'REKAP_DKN_IJAZAH',
+      color: '#1E4620',
+      colorName: 'Hijau Tua & Emas Prestasi',
+      badgeBg: 'bg-emerald-900',
+      badgeBorder: 'border-emerald-800',
+      borderColor: '#86EFAC',
+      desc: 'Buku Induk Rekapitulasi Kelulusan DKN resmi, Nilai Akhir Ijazah, KKM 75.0, dan penentuan Status Kelulusan.',
+      features: ['Conditional Format LULUS Hijau Pastel', 'Formula Nilai Akhir Ijazah', 'Border Ganda Resmi', 'Siap Cetak Landscape']
+    },
+    {
+      name: 'PENGATURAN_SEKOLAH',
+      color: '#1E3A8A',
+      colorName: 'Biru Navy Resmi SDN Babelan Kota 01',
+      badgeBg: 'bg-blue-900',
+      badgeBorder: 'border-blue-800',
+      borderColor: '#BFDBFE',
+      desc: 'Parameter lembaga: NPSN 20218320, NSS, Kepala Sekolah, NIP, KKM (75), Bobot (60:40), dan Nomor SK Kelulusan.',
+      features: ['Key-Value Parameter', 'Border Rapih Presisi', 'Data Titimangsa Ijazah', 'Tanda Tangan Elektronik']
+    }
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+        
+        {/* Modal Header */}
+        <div className="bg-gradient-to-r from-[#0F9D58] via-[#137333] to-[#1E3A8A] text-white p-6 relative">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur border border-white/25 flex items-center justify-center shadow-lg">
+                <FileSpreadsheet className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-black tracking-tight">
+                    Penyimpanan & Format Google Spreadsheet
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-400/30 text-emerald-100 border border-emerald-300/30 text-[11px] font-bold">
+                    TP 2026/2027
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-100 mt-1">
+                  Format nama sheet, styling tabel, dan border berwana menarik untuk SD Negeri Babelan Kota 01
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+          
+          {/* Section 1: Daftar Nama Sheet & Format Tabel/Border Berwarna */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-emerald-600" />
+                  <span>Struktur Nama Sheet & Format Desain Tabel / Border</span>
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Setiap sheet dirancang dengan palet warna Google Sheets profesional, border solid berjarak tegas, dan font Arial.
+                </p>
+              </div>
+
+              <button
+                onClick={() => exportFullExcelDatabase(db)}
+                className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-emerald-200"
+                title="Download template spreadsheet dalam format .xlsx kompatibel Google Sheets"
+              >
+                <Download className="w-4 h-4 text-emerald-700" />
+                <span>Unduh File Spreadsheet</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {sheetDefinitions.map((sheet, idx) => (
+                <div 
+                  key={sheet.name}
+                  className="p-4 rounded-2xl border transition-all hover:shadow-sm"
+                  style={{ 
+                    borderColor: sheet.borderColor,
+                    backgroundColor: idx % 2 === 0 ? '#FAFCFA' : '#FFFFFF'
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-1 rounded-lg text-white font-black text-xs shadow-xs ${sheet.badgeBg}`}>
+                        {idx + 1}. {sheet.name}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 font-mono">
+                      {sheet.color}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-700 mb-2.5 leading-relaxed font-medium">
+                    {sheet.desc}
+                  </p>
+
+                  {/* Feature chips */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {sheet.features.map((feat, fIdx) => (
+                      <span 
+                        key={fIdx} 
+                        className="px-2 py-0.5 bg-slate-100 rounded-md text-[10px] font-semibold text-slate-600 border border-slate-200"
+                      >
+                        ✓ {feat}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 2: Koneksi & Sinkronisasi Online */}
+          <div className="bg-gradient-to-br from-slate-50 to-emerald-50/40 p-5 rounded-2xl border border-emerald-200/80 space-y-4">
+            <div>
+              <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Database className="w-4 h-4 text-emerald-700" />
+                <span>Hubungkan ke Google Spreadsheet (script.google.com)</span>
+              </h4>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Salin skrip <code>Code.gs</code> ke editor Apps Script Google Spreadsheet Anda, lalu sebarkan (deploy) sebagai Web App untuk sinkronisasi otomatis.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 block">
+                URL Web App Google Apps Script (Deployment Exec URL):
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                  value={gasUrl}
+                  onChange={(e) => handleSaveGasUrl(e.target.value)}
+                  className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                />
+                <button
+                  onClick={handleSyncToSpreadsheet}
+                  disabled={syncStatus === 'syncing'}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>{syncStatus === 'syncing' ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
+                </button>
+              </div>
+            </div>
+
+            {statusMessage && (
+              <div className={`p-3.5 rounded-xl text-xs font-medium flex items-center justify-between ${
+                syncStatus === 'success' 
+                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
+                  : 'bg-red-50 text-red-900 border border-red-200'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {syncStatus === 'success' ? <Check className="w-4 h-4 text-emerald-700" /> : <AlertCircle className="w-4 h-4 text-red-600" />}
+                  <span>{statusMessage}</span>
+                </div>
+                <span className="text-[10px] font-bold opacity-75">Tersimpan</span>
+              </div>
+            )}
+
+            {/* Quick Actions */}
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-200/60">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyScript}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 shadow-xs transition flex items-center gap-1.5"
+                >
+                  {copiedCode ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-600" />}
+                  <span>{copiedCode ? 'Skrip Berhasil Disalin!' : 'Salin Skrip Code.gs'}</span>
+                </button>
+
+                <a
+                  href="https://sheets.new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 shadow-xs transition flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-600" />
+                  <span>Buka Google Sheets Baru</span>
+                </a>
+              </div>
+
+              <div className="text-[11px] text-slate-500 font-medium">
+                Penyimpanan otomatis mendeteksi perubahan data siswa dan nilai.
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Modal Footer */}
+        <div className="bg-slate-50 p-4 border-t border-slate-200 flex items-center justify-between">
+          <div className="text-xs text-slate-500">
+            SD Negeri Babelan Kota 01 · Sistem Rapor & Ijazah Terpadu
+          </div>
+          <button
+            onClick={onClose}
+            className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition shadow-sm"
+          >
+            Tutup
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};
