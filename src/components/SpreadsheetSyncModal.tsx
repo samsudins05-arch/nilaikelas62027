@@ -8,10 +8,7 @@ import {
   UploadCloud, 
   Download, 
   DownloadCloud,
-  Sparkles,
-  Layers,
   Database,
-  ShieldCheck,
   AlertCircle
 } from 'lucide-react';
 import { AppDatabase } from '../types';
@@ -152,62 +149,9 @@ export const SpreadsheetSyncModal: React.FC<SpreadsheetSyncModalProps> = ({
     }
   };
 
-  const sheetDefinitions = [
-    {
-      name: 'DATA_SISWA',
-      color: '#0F9D58',
-      colorName: 'Hijau Emerald Google Sheets',
-      badgeBg: 'bg-emerald-600',
-      badgeBorder: 'border-emerald-500',
-      borderColor: '#A3D9A5',
-      desc: 'Tabel Biodata Siswa Kelas 6A-6D lengkap (NIS, NISN resmi, Nama Lengkap, JK, Tempat Tanggal Lahir, Nama Orang Tua/Wali, No Seri Ijazah).',
-      features: ['Freeze Baris Header 1', 'Zebra Row #F0FDF4', 'Center Align NIS & NISN', 'Border Solid Hijau Lembut']
-    },
-    {
-      name: 'RAPOR_6_SEMESTER',
-      color: '#137333',
-      colorName: 'Hijau Deep Forest',
-      badgeBg: 'bg-green-700',
-      badgeBorder: 'border-green-600',
-      borderColor: '#B7E1CD',
-      desc: 'Header bertingkat 6 semester (K4 Smt 1/2, K5 Smt 1/2, K6 Smt 1/2) untuk 9 mata pelajaran dengan rumus rata-rata otomatis.',
-      features: ['Header 2 Baris Bertingkat', '9 Mapel Lengkap', 'Border Hijau Kolom Mapel', 'Formula =AVERAGE() Otomatis']
-    },
-    {
-      name: 'UJIAN_SEKOLAH',
-      color: '#1B4D3E',
-      colorName: 'Hijau Toska Hutan & Aksen Emas',
-      badgeBg: 'bg-teal-800',
-      badgeBorder: 'border-teal-700',
-      borderColor: '#A7F3D0',
-      desc: 'Input nilai ujian sekolah komposit: 60% Nilai Tulis + 40% Nilai Praktek (Mapel Non-Praktek: 100% Nilai Tulis).',
-      features: ['Sub-kolom Tulis & Praktek', 'Highlight Aksen Emas Praktek', 'Formula =0.6*Tulis+0.4*Praktek', 'Format Angka Desimal']
-    },
-    {
-      name: 'REKAP_DKN_IJAZAH',
-      color: '#1E4620',
-      colorName: 'Hijau Tua & Emas Prestasi',
-      badgeBg: 'bg-emerald-900',
-      badgeBorder: 'border-emerald-800',
-      borderColor: '#86EFAC',
-      desc: 'Buku Induk Rekapitulasi Kelulusan DKN resmi, Nilai Akhir Ijazah, KKM 75.0, dan penentuan Status Kelulusan.',
-      features: ['Conditional Format LULUS Hijau Pastel', 'Formula Nilai Akhir Ijazah', 'Border Ganda Resmi', 'Siap Cetak Landscape']
-    },
-    {
-      name: 'PENGATURAN_SEKOLAH',
-      color: '#1E3A8A',
-      colorName: 'Biru Navy Resmi SDN Babelan Kota 01',
-      badgeBg: 'bg-blue-900',
-      badgeBorder: 'border-blue-800',
-      borderColor: '#BFDBFE',
-      desc: 'Parameter lembaga: NPSN 20218320, NSS, Kepala Sekolah, NIP, KKM (75), Bobot (60:40), dan Nomor SK Kelulusan.',
-      features: ['Key-Value Parameter', 'Border Rapih Presisi', 'Data Titimangsa Ijazah', 'Tanda Tangan Elektronik']
-    }
-  ];
-
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Modal Header */}
         <div className="bg-gradient-to-r from-[#0F9D58] via-[#137333] to-[#1E3A8A] text-white p-6 relative">
@@ -219,14 +163,14 @@ export const SpreadsheetSyncModal: React.FC<SpreadsheetSyncModalProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-xl font-black tracking-tight">
-                    Penyimpanan & Format Google Spreadsheet
+                    Hubungkan ke Google Spreadsheet
                   </h3>
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-400/30 text-emerald-100 border border-emerald-300/30 text-[11px] font-bold">
-                    TP 2026/2027
+                    script.google.com
                   </span>
                 </div>
                 <p className="text-xs text-emerald-100 mt-1">
-                  Format nama sheet, styling tabel, dan border berwana menarik untuk SD Negeri Babelan Kota 01
+                  Sinkronisasi cloud online dan integrasi Google Spreadsheet untuk SD Negeri Babelan Kota 01
                 </p>
               </div>
             </div>
@@ -241,82 +185,29 @@ export const SpreadsheetSyncModal: React.FC<SpreadsheetSyncModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
           
-          {/* Section 1: Daftar Nama Sheet & Format Tabel/Border Berwarna */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
+          {/* Section: Koneksi & Sinkronisasi Online */}
+          <div className="bg-gradient-to-br from-slate-50 to-emerald-50/40 p-5 rounded-2xl border border-emerald-200/80 space-y-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-emerald-600" />
-                  <span>Struktur Nama Sheet & Format Desain Tabel / Border</span>
+                  <Database className="w-4 h-4 text-emerald-700" />
+                  <span>Hubungkan ke Google Spreadsheet (script.google.com)</span>
                 </h4>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Setiap sheet dirancang dengan palet warna Google Sheets profesional, border solid berjarak tegas, dan font Arial.
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  Salin skrip <code>Code.gs</code> ke editor Apps Script Google Spreadsheet Anda, lalu terapkan (deploy) sebagai Web App untuk sinkronisasi otomatis.
                 </p>
               </div>
 
               <button
                 onClick={() => exportFullExcelDatabase(db)}
-                className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-emerald-200"
-                title="Download template spreadsheet dalam format .xlsx kompatibel Google Sheets"
+                className="shrink-0 px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-emerald-300 shadow-xs"
+                title="Download file database dalam format .xlsx kompatibel Google Sheets"
               >
                 <Download className="w-4 h-4 text-emerald-700" />
                 <span>Unduh File Spreadsheet</span>
               </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {sheetDefinitions.map((sheet, idx) => (
-                <div 
-                  key={sheet.name}
-                  className="p-4 rounded-2xl border transition-all hover:shadow-sm"
-                  style={{ 
-                    borderColor: sheet.borderColor,
-                    backgroundColor: idx % 2 === 0 ? '#FAFCFA' : '#FFFFFF'
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-1 rounded-lg text-white font-black text-xs shadow-xs ${sheet.badgeBg}`}>
-                        {idx + 1}. {sheet.name}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 font-mono">
-                      {sheet.color}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-700 mb-2.5 leading-relaxed font-medium">
-                    {sheet.desc}
-                  </p>
-
-                  {/* Feature chips */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {sheet.features.map((feat, fIdx) => (
-                      <span 
-                        key={fIdx} 
-                        className="px-2 py-0.5 bg-slate-100 rounded-md text-[10px] font-semibold text-slate-600 border border-slate-200"
-                      >
-                        ✓ {feat}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Section 2: Koneksi & Sinkronisasi Online */}
-          <div className="bg-gradient-to-br from-slate-50 to-emerald-50/40 p-5 rounded-2xl border border-emerald-200/80 space-y-4">
-            <div>
-              <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <Database className="w-4 h-4 text-emerald-700" />
-                <span>Hubungkan ke Google Spreadsheet (script.google.com)</span>
-              </h4>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Salin skrip <code>Code.gs</code> ke editor Apps Script Google Spreadsheet Anda, lalu sebarkan (deploy) sebagai Web App untuk sinkronisasi otomatis.
-              </p>
             </div>
 
             <div className="space-y-3">
@@ -375,7 +266,7 @@ export const SpreadsheetSyncModal: React.FC<SpreadsheetSyncModalProps> = ({
 
             {/* Quick Actions */}
             <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-200/60">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={handleCopyScript}
                   className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 shadow-xs transition flex items-center gap-1.5"
