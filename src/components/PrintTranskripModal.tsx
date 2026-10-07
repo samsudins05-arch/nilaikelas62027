@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Printer, X, Upload, RotateCcw } from 'lucide-react';
 import { SchoolProfile, Student, StudentGrades, StudentExams, SemesterKey, SEMESTER_LIST } from '../types';
-import { calculateStudentGraduationSummary } from '../utils/calculations';
+import { calculateStudentGraduationSummary, formatBirthDateIndonesian } from '../utils/calculations';
 
 interface PrintTranskripModalProps {
   student: Student;
@@ -168,7 +168,7 @@ export const PrintTranskripModal: React.FC<PrintTranskripModalProps> = ({
           <div className="grid grid-cols-12 gap-1">
             <span className="col-span-3 font-semibold">Tempat, Tanggal Lahir</span>
             <span className="col-span-1 text-center">:</span>
-            <span className="col-span-8">{student.birthPlace}, {student.birthDate}</span>
+            <span className="col-span-8">{student.birthPlace}, {formatBirthDateIndonesian(student.birthDate)}</span>
           </div>
           <div className="grid grid-cols-12 gap-1">
             <span className="col-span-3 font-semibold">No. Seri Ijazah</span>

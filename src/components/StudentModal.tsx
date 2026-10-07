@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Check, Camera, Upload, Trash2 } from 'lucide-react';
 import { Student, ClassRoom } from '../types';
+import { cleanBirthDateString } from '../utils/calculations';
 
 interface StudentModalProps {
   initialStudent?: Student | null;
@@ -21,7 +22,7 @@ export const StudentModal: React.FC<StudentModalProps> = ({
     gender: initialStudent?.gender || 'L',
     classRoom: initialStudent?.classRoom || '6A',
     birthPlace: initialStudent?.birthPlace || 'Bekasi',
-    birthDate: initialStudent?.birthDate || '2014-05-15',
+    birthDate: cleanBirthDateString(initialStudent?.birthDate) || '2014-05-15',
     parentName: initialStudent?.parentName || '',
     address: initialStudent?.address || '',
     phone: initialStudent?.phone || '',
@@ -44,7 +45,7 @@ export const StudentModal: React.FC<StudentModalProps> = ({
       gender: formData.gender as 'L' | 'P',
       classRoom: formData.classRoom as ClassRoom,
       birthPlace: formData.birthPlace?.trim() || 'Bekasi',
-      birthDate: formData.birthDate?.trim() || '2014-01-01',
+      birthDate: cleanBirthDateString(formData.birthDate) || '2014-01-01',
       parentName: formData.parentName?.trim() || '-',
       address: formData.address?.trim() || '-',
       phone: formData.phone?.trim() || '-',

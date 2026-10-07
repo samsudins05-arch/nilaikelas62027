@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { AppDatabase, Student, SUBJECT_LIST, SemesterKey } from '../types';
-import { calculateStudentGraduationSummary } from './calculations';
+import { calculateStudentGraduationSummary, cleanBirthDateString } from './calculations';
 
 export function exportFullExcelDatabase(db: AppDatabase) {
   const wb = XLSX.utils.book_new();
@@ -243,7 +243,7 @@ export async function parseExcelDatabase(file: File): Promise<{
                 gender: String(row['L/P'] || row['gender'] || 'L').toUpperCase().startsWith('P') ? 'P' : 'L',
                 classRoom: ['6A', '6B', '6C', '6D'].includes(classRoom) ? classRoom : '6A',
                 birthPlace: String(row['Tempat Lahir'] || 'Bekasi').trim(),
-                birthDate: String(row['Tanggal Lahir'] || '2014-05-01').trim(),
+                birthDate: cleanBirthDateString(row['Tanggal Lahir']) || '2014-06-06',
                 parentName: String(row['Nama Orang Tua / Wali'] || row['Orang Tua'] || '-').trim(),
                 address: String(row['Alamat Rumah'] || row['Alamat'] || '-').trim(),
                 phone: String(row['No Telepon'] || '-').trim(),

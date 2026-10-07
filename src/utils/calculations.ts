@@ -173,3 +173,88 @@ export function numberToWordsIndonesian(n: number): string {
   }
   return result.trim();
 }
+
+/**
+ * Membersihkan tanggal lahir dari format mentah Date/GMT menjadi format bersih
+ * Mencegah format GMT seperti: Fri Jun 06 2014 00:00:00 GMT+0700 (Waktu Indonesia Barat)
+ */
+export function cleanBirthDateString(val?: string | null): string {
+  if (!val) return '2014-06-06';
+  const str = String(val).trim();
+
+  // 1. Pola regex khusus untuk format GMT: "Fri Jun 06 2014 00:00:00 GMT+0700 (Waktu Indonesia Barat)"
+  const gmtMatch = str.match(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/i);
+  if (gmtMatch) {
+    const monthNames: Record<string, string> = {
+      jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+      jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
+    };
+    const monKey = gmtMatch[1].toLowerCase();
+    const mStr = monthNames[monKey] || '06';
+    const dStr = gmtMatch[2].padStart(2, '0');
+    const yStr = gmtMatch[3];
+    return `${yStr}-${mStr}-${dStr}`;
+  }
+
+  // 2. Format DD/MM/YYYY atau DD-MM-YYYY (misal: "06/06/2014" atau "6/6/2014")
+  const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const mon = dmyMatch[2].padStart(2, '0');
+    const yr = dmyMatch[3];
+    return `${yr}-${mon}-${day}`;
+  }
+
+  // 3. Format YYYY/MM/DD atau YYYY-MM-DD (misal: "2014-06-06")
+  const ymdMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (ymdMatch) {
+    const yr = ymdMatch[1];
+    const mon = ymdMatch[2].padStart(2, '0');
+    const day = ymdMatch[3].padStart(2, '0');
+    return `${yr}-${mon}-${day}`;
+  }
+
+  // 4. Fallback jika mengandung string GMT, WIB, atau Waktu Indonesia
+  if (
+    str.includes('GMT') ||
+    str.includes('WIB') ||
+    str.includes('Waktu Indonesia') ||
+    str.includes('00:00:00')
+  ) {
+    try {
+      const cleanStr = str.replace(/\s*\([^)]*\)/g, '');
+      const d = new Date(cleanStr);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    } catch {}
+  }
+
+  return str;
+}
+
+/**
+ * Format tanggal lahir untuk dicetak di Dokumen SKL / Transkrip resmi (e.g. "6 Juni 2014")
+ */
+export function formatBirthDateIndonesian(val?: string | null): string {
+  if (!val) return '-';
+  const cleaned = cleanBirthDateString(val);
+  const parts = cleaned.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    const year = parts[0];
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    if (monthIdx >= 0 && monthIdx < 12) {
+      return `${day} ${months[monthIdx]} ${year}`;
+    }
+  }
+  return cleaned;
+}
+

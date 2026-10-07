@@ -26,9 +26,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           
           {/* Logo & School Branding */}
           <div className="flex items-center gap-3.5">
-            <div className="relative group">
-              <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-lg transition-transform group-hover:scale-105">
-                <GraduationCap className="w-7 h-7 text-amber-300 drop-shadow-sm" />
+            <div className="relative group shrink-0">
+              <div className="w-13 h-13 rounded-2xl bg-white/15 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-lg transition-transform group-hover:scale-105 p-1 overflow-hidden">
+                <img
+                  src="https://i.ibb.co.com/Xks9PjJv/logo-ops-removebg-preview.png"
+                  alt="Logo SDN Babelan Kota 01"
+                  className="w-full h-full object-contain filter drop-shadow-md"
+                />
               </div>
               <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-amber-400 text-[#172554] text-[10px] font-extrabold rounded-md shadow">
                 01

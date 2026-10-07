@@ -29,10 +29,12 @@ export const CODE_GS_SOURCE = `/**
 function onOpen() {
   try {
     var ui = SpreadsheetApp.getUi();
-    ui.createMenu('📊 Portal Rapor & Ijazah SDN Babelan Kota 01')
-      .addItem('🚀 Setup / Format Ulang Semua Sheet', 'setupGoogleSheetDatabase')
-      .addItem('🔄 Simpan Seluruh Data ke Sheet', 'syncPropertiesToSheets')
-      .addItem('📥 Muat Data dari Sheet ke Web App', 'loadSheetsToProperties')
+    ui.createMenu('Portal Rapor & Ijazah SDN Babelan Kota 01')
+      .addItem('Setup / Format Ulang Semua Sheet', 'setupGoogleSheetDatabase')
+      .addItem('Simpan Seluruh Data ke Sheet', 'syncPropertiesToSheets')
+      .addItem('Muat Data dari Sheet ke Web App', 'loadSheetsToProperties')
+      .addSeparator()
+      .addItem('Perbaiki Format Tanggal Lahir di Sheet', 'fixBirthDateFormatInSheets')
       .addToUi();
   } catch (e) {
     Logger.log('Bukan context spreadsheet UI: ' + e.toString());
@@ -40,8 +42,15 @@ function onOpen() {
 }
 
 function doGet(e) {
-  if (e && e.parameter && e.parameter.action === 'getData') {
-    return ContentService.createTextOutput(JSON.stringify(getAllData()))
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : '';
+  if (action === 'getData' || action === 'loadSheets' || action === 'loadFromSheet') {
+    var result;
+    if (action === 'loadSheets' || action === 'loadFromSheet') {
+      result = loadSheetsToProperties();
+    } else {
+      result = getAllData();
+    }
+    return ContentService.createTextOutput(JSON.stringify(result))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -64,6 +73,11 @@ function doPost(e) {
         timestamp: new Date().toISOString()
       })).setMimeType(ContentService.MimeType.JSON);
     }
+    if (postData.action === 'loadFromSheet' || postData.action === 'loadSheets') {
+      var loadResult = loadSheetsToProperties();
+      return ContentService.createTextOutput(JSON.stringify(loadResult))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Action tidak dikenal' }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
@@ -73,19 +87,13 @@ function doPost(e) {
 }
 
 /**
- * Menyimpan seluruh data aplikasi ke PropertiesService
+ * Menyimpan seluruh data aplikasi ke PropertiesService (tidak menimpa sheet secara otomatis)
  */
 function saveAllData(payloadJson) {
   try {
     var userProperties = PropertiesService.getUserProperties();
     userProperties.setProperty('BAKOT01_RAPOR_DB_V2', payloadJson);
-    try {
-      var db = JSON.parse(payloadJson);
-      writeAllDataToSheets(db);
-    } catch (e) {
-      Logger.log('Gagal update sheet: ' + e.toString());
-    }
-    return { success: true, message: 'Data berhasil disimpan ke sistem Google Apps Script & Sheet!' };
+    return { success: true, message: 'Data berhasil disimpan ke sistem Google Apps Script!' };
   } catch (err) {
     return { success: false, message: 'Gagal menyimpan: ' + err.toString() };
   }
@@ -223,6 +231,88 @@ function setupGoogleSheetDatabase() {
 }
 
 /**
+ * Format tanggal lahir agar tetap bersih sesuai tampilan asli di sheet
+ * Mencegah konversi otomatis menjadi format Date GMT (Fri Jun 06 2014 00:00:00 GMT+0700)
+ */
+function formatBirthDateCell(rawVal, displayVal) {
+  // 1. Jika displayVal dari sheet sudah berupa string rapi tanpa teks GMT
+  if (displayVal) {
+    var dStr = String(displayVal).trim();
+    if (dStr && dStr.indexOf('GMT') < 0 && dStr.indexOf('WIB') < 0 && dStr.indexOf('Waktu Indonesia') < 0 && dStr.indexOf('00:00:00') < 0) {
+      // Normalisasi DD/MM/YYYY atau DD-MM-YYYY menjadi YYYY-MM-DD agar seragam di Web App
+      var matchDmy = dStr.match(/^([0-9]{1,2})[/-]([0-9]{1,2})[/-]([0-9]{4})$/);
+      if (matchDmy) {
+        var day = ('0' + matchDmy[1]).slice(-2);
+        var mon = ('0' + matchDmy[2]).slice(-2);
+        var yr = matchDmy[3];
+        return yr + '-' + mon + '-' + day;
+      }
+      var matchYmd = dStr.match(/^([0-9]{4})[/-]([0-9]{1,2})[/-]([0-9]{1,2})$/);
+      if (matchYmd) {
+        var yr2 = matchYmd[1];
+        var mon2 = ('0' + matchYmd[2]).slice(-2);
+        var day2 = ('0' + matchYmd[3]).slice(-2);
+        return yr2 + '-' + mon2 + '-' + day2;
+      }
+      return dStr;
+    }
+  }
+
+  if (!rawVal) return '2014-06-06';
+
+  // 2. Jika rawVal adalah objek Date Google Apps Script
+  if (Object.prototype.toString.call(rawVal) === '[object Date]' || rawVal instanceof Date) {
+    try {
+      if (!isNaN(rawVal.getTime())) {
+        var y = rawVal.getFullYear();
+        var m = ('0' + (rawVal.getMonth() + 1)).slice(-2);
+        var d = ('0' + rawVal.getDate()).slice(-2);
+        return y + '-' + m + '-' + d;
+      }
+    } catch (eDate) {}
+  }
+
+  // 3. String matcher untuk format GMT bawaan Javascript:
+  // "Fri Jun 06 2014 00:00:00 GMT+0700 (Waktu Indonesia Barat)"
+  var s = String(rawVal).trim();
+  var gmtMatch = s.match(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[ ]+([A-Za-z]{3})[ ]+([0-9]{1,2})[ ]+([0-9]{4})/i);
+  if (gmtMatch) {
+    var monthNames = { 'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12' };
+    var monKey = gmtMatch[1].toLowerCase();
+    var mStr = monthNames[monKey] || '06';
+    var dStr2 = ('0' + gmtMatch[2]).slice(-2);
+    var yStr = gmtMatch[3];
+    return yStr + '-' + mStr + '-' + dStr2;
+  }
+
+  // Cek format DD/MM/YYYY atau DD-MM-YYYY
+  var dmyMatch = s.match(/^([0-9]{1,2})[/-]([0-9]{1,2})[/-]([0-9]{4})/);
+  if (dmyMatch) {
+    return dmyMatch[3] + '-' + ('0' + dmyMatch[2]).slice(-2) + '-' + ('0' + dmyMatch[1]).slice(-2);
+  }
+
+  // Cek format YYYY-MM-DD
+  var ymdMatch = s.match(/^([0-9]{4})[/-]([0-9]{1,2})[/-]([0-9]{1,2})/);
+  if (ymdMatch) {
+    return ymdMatch[1] + '-' + ('0' + ymdMatch[2]).slice(-2) + '-' + ('0' + ymdMatch[3]).slice(-2);
+  }
+
+  // Fallback Date parser standar dengan membersihkan tanda kurung timezone
+  try {
+    var cleanS = s.replace(/[ ]*\([^)]*\)/g, '');
+    var parsed = new Date(cleanS);
+    if (!isNaN(parsed.getTime())) {
+      var y3 = parsed.getFullYear();
+      var m3 = ('0' + (parsed.getMonth() + 1)).slice(-2);
+      var d3 = ('0' + parsed.getDate()).slice(-2);
+      return y3 + '-' + m3 + '-' + d3;
+    }
+  } catch (eParse) {}
+
+  return s || '2014-06-06';
+}
+
+/**
  * Menulis data JSON aplikasi langsung ke lembar kerja Spreadsheet
  */
 function writeAllDataToSheets(db) {
@@ -232,70 +322,285 @@ function writeAllDataToSheets(db) {
 
   setupGoogleSheetDatabase();
 
-  // Tulis DATA_SISWA
+  var subKeys = ['pai', 'ppkn', 'bindo', 'mtk', 'ipas', 'sbdp', 'pjok', 'sunda', 'bing'];
+  var semList = ['K4_S1', 'K4_S2', 'K5_S1', 'K5_S2', 'K6_S1', 'K6_S2'];
+
+  // 1. Tulis DATA_SISWA
   if (db.students && db.students.length > 0) {
     var ws1 = ss.getSheetByName('DATA_SISWA');
-    var rows1 = db.students.map(function(s, idx) {
-      return [
-        idx + 1, s.id, s.classRoom, s.nis, s.nisn, s.name, s.gender,
-        s.birthPlace, s.birthDate, s.parentName || '-', s.address || '-',
-        s.phone || '-', s.serialNumber || '-'
-      ];
-    });
-    if (ws1.getLastRow() > 1) {
-      ws1.getRange(2, 1, ws1.getLastRow() - 1, 13).clearContent();
-    }
-    var range1 = ws1.getRange(2, 1, rows1.length, 13);
-    range1.setValues(rows1).setFontFamily('Arial').setFontSize(9)
-      .setBorder(true, true, true, true, true, true, '#CBD5E1', SpreadsheetApp.BorderStyle.SOLID);
-    
-    // Zebra striping
-    for (var r = 0; r < rows1.length; r++) {
-      if (r % 2 === 1) {
-        ws1.getRange(r + 2, 1, 1, 13).setBackground('#F0FDF4');
-      } else {
-        ws1.getRange(r + 2, 1, 1, 13).setBackground('#FFFFFF');
+    if (ws1) {
+      var rows1 = db.students.map(function(s, idx) {
+        var cleanBirth = String(formatBirthDateCell(s.birthDate, s.birthDate)).trim();
+        return [
+          idx + 1, s.id, s.classRoom, s.nis, s.nisn, s.name, s.gender,
+          s.birthPlace, cleanBirth, s.parentName || '-', s.address || '-',
+          s.phone || '-', s.serialNumber || ('DN-02/D-SD/27/01/' + String(s.nis).padStart(4, '0'))
+        ];
+      });
+      if (ws1.getLastRow() > 1) {
+        ws1.getRange(2, 1, ws1.getLastRow() - 1, 13).clearContent();
+      }
+      // Format kolom tanggal lahir sebagai teks biasa agar tidak berubah jadi Date GMT
+      ws1.getRange(2, 9, Math.max(rows1.length, 1), 1).setNumberFormat('@');
+      var range1 = ws1.getRange(2, 1, rows1.length, 13);
+      range1.setValues(rows1).setFontFamily('Arial').setFontSize(9)
+        .setBorder(true, true, true, true, true, true, '#CBD5E1', SpreadsheetApp.BorderStyle.SOLID);
+      
+      for (var r = 0; r < rows1.length; r++) {
+        ws1.getRange(r + 2, 1, 1, 13).setBackground(r % 2 === 1 ? '#F0FDF4' : '#FFFFFF');
       }
     }
   }
 
-  // Tulis PENGATURAN_SEKOLAH
+  // 2. Tulis RAPOR_6_SEMESTER
+  if (db.students && db.students.length > 0) {
+    var ws2 = ss.getSheetByName('RAPOR_6_SEMESTER');
+    if (ws2) {
+      var rows2 = [];
+      var semRowNo = 1;
+      db.students.forEach(function(s) {
+        semList.forEach(function(sem) {
+          var g = (db.grades && db.grades[s.id] && db.grades[s.id][sem]) || {};
+          var scores = subKeys.map(function(k) { return Number(g[k]) || 0; });
+          var sum = 0, count = 0;
+          scores.forEach(function(sc) { if (sc > 0) { sum += sc; count++; } });
+          var avg = count > 0 ? (sum / subKeys.length).toFixed(1) : 0;
+          rows2.push([
+            semRowNo++, s.nisn, s.name, s.classRoom, sem,
+            scores[0], scores[1], scores[2], scores[3], scores[4],
+            scores[5], scores[6], scores[7], scores[8],
+            Number(avg)
+          ]);
+        });
+      });
+
+      if (ws2.getLastRow() > 1) {
+        ws2.getRange(2, 1, ws2.getLastRow() - 1, 15).clearContent();
+      }
+      if (rows2.length > 0) {
+        var range2 = ws2.getRange(2, 1, rows2.length, 15);
+        range2.setValues(rows2).setFontFamily('Arial').setFontSize(9)
+          .setBorder(true, true, true, true, true, true, '#CBD5E1', SpreadsheetApp.BorderStyle.SOLID);
+        for (var r2 = 0; r2 < rows2.length; r2++) {
+          ws2.getRange(r2 + 2, 1, 1, 15).setBackground(r2 % 2 === 1 ? '#F7FEE7' : '#FFFFFF');
+        }
+      }
+    }
+  }
+
+  // 3. Tulis UJIAN_SEKOLAH
+  if (db.students && db.students.length > 0) {
+    var ws3 = ss.getSheetByName('UJIAN_SEKOLAH');
+    if (ws3) {
+      var rows3 = db.students.map(function(s, idx) {
+        var ex = (db.exams && db.exams[s.id]) || {};
+        var pai = ex.pai || { written: 0, practice: 0, finalScore: 0 };
+        var ppkn = ex.ppkn || { written: 0, practice: 0, finalScore: 0 };
+        var bindo = ex.bindo || { written: 0, practice: 0, finalScore: 0 };
+        var mtk = ex.mtk || { written: 0, practice: 0, finalScore: 0 };
+        var ipas = ex.ipas || { written: 0, practice: 0, finalScore: 0 };
+        var sbdp = ex.sbdp || { written: 0, practice: 0, finalScore: 0 };
+        var pjok = ex.pjok || { written: 0, practice: 0, finalScore: 0 };
+        var sunda = ex.sunda || { written: 0, practice: 0, finalScore: 0 };
+        var bing = ex.bing || { written: 0, practice: 0, finalScore: 0 };
+        var allScores = [pai.finalScore, ppkn.finalScore, bindo.finalScore, mtk.finalScore, ipas.finalScore, sbdp.finalScore, pjok.finalScore, sunda.finalScore, bing.finalScore];
+        var sumEx = 0;
+        allScores.forEach(function(v) { sumEx += (Number(v) || 0); });
+        var avgEx = Number((sumEx / 9).toFixed(1));
+
+        return [
+          idx + 1, s.nisn, s.name, s.classRoom,
+          pai.written || 0, pai.practice || 0,
+          ppkn.written || 0,
+          bindo.written || 0, bindo.practice || 0,
+          mtk.written || 0,
+          ipas.written || 0, ipas.practice || 0,
+          sbdp.written || 0, sbdp.practice || 0,
+          pjok.written || 0, pjok.practice || 0,
+          sunda.written || 0, sunda.practice || 0,
+          bing.written || 0,
+          avgEx
+        ];
+      });
+
+      if (ws3.getLastRow() > 1) {
+        ws3.getRange(2, 1, ws3.getLastRow() - 1, 20).clearContent();
+      }
+      if (rows3.length > 0) {
+        var range3 = ws3.getRange(2, 1, rows3.length, 20);
+        range3.setValues(rows3).setFontFamily('Arial').setFontSize(9)
+          .setBorder(true, true, true, true, true, true, '#CBD5E1', SpreadsheetApp.BorderStyle.SOLID);
+        for (var r3 = 0; r3 < rows3.length; r3++) {
+          ws3.getRange(r3 + 2, 1, 1, 20).setBackground(r3 % 2 === 1 ? '#ECFDF5' : '#FFFFFF');
+        }
+      }
+    }
+  }
+
+  // 4. Tulis REKAP_DKN_IJAZAH
+  if (db.students && db.students.length > 0) {
+    var ws4 = ss.getSheetByName('REKAP_DKN_IJAZAH');
+    if (ws4) {
+      var rows4 = db.students.map(function(s, idx) {
+        var semsTotal = 0, semsCount = 0;
+        semList.forEach(function(sem) {
+          var g = (db.grades && db.grades[s.id] && db.grades[s.id][sem]) || {};
+          subKeys.forEach(function(k) {
+            var val = Number(g[k]) || 0;
+            if (val > 0) { semsTotal += val; semsCount++; }
+          });
+        });
+        var raporAvg = semsCount > 0 ? Number((semsTotal / semsCount).toFixed(1)) : 85.0;
+
+        var ex = (db.exams && db.exams[s.id]) || {};
+        var examTotal = 0;
+        subKeys.forEach(function(k) {
+          examTotal += (ex[k] ? Number(ex[k].finalScore) : 85);
+        });
+        var examAvg = Number((examTotal / 9).toFixed(1));
+        var rWeight = (db.school && db.school.reportWeight) ? db.school.reportWeight / 100 : 0.6;
+        var eWeight = (db.school && db.school.examWeight) ? db.school.examWeight / 100 : 0.4;
+        var finalIjazah = Number(((raporAvg * rWeight) + (examAvg * eWeight)).toFixed(1));
+        var kkm = (db.school && db.school.passingKkm) ? db.school.passingKkm : 75.0;
+        var status = finalIjazah >= kkm ? 'LULUS' : 'BELUM';
+        var serial = s.serialNumber || ('DN-02/D-SD/27/01/' + String(s.nis).padStart(4, '0'));
+
+        return [
+          idx + 1, s.classRoom, s.nis, s.nisn, s.name, s.gender,
+          raporAvg, examAvg, finalIjazah, kkm, status, serial
+        ];
+      });
+
+      if (ws4.getLastRow() > 1) {
+        ws4.getRange(2, 1, ws4.getLastRow() - 1, 12).clearContent();
+      }
+      if (rows4.length > 0) {
+        var range4 = ws4.getRange(2, 1, rows4.length, 12);
+        range4.setValues(rows4).setFontFamily('Arial').setFontSize(9)
+          .setBorder(true, true, true, true, true, true, '#CBD5E1', SpreadsheetApp.BorderStyle.SOLID);
+        for (var r4 = 0; r4 < rows4.length; r4++) {
+          ws4.getRange(r4 + 2, 1, 1, 12).setBackground(r4 % 2 === 1 ? '#FEFCE8' : '#FFFFFF');
+        }
+      }
+    }
+  }
+
+  // 5. Tulis PENGATURAN_SEKOLAH
   if (db.school) {
     var ws5 = ss.getSheetByName('PENGATURAN_SEKOLAH');
-    var schRows = [
-      ['Nama Satuan Pendidikan', db.school.name || 'SD NEGERI BABELAN KOTA 01'],
-      ['NPSN', db.school.npsn || '20218320'],
-      ['NSS', db.school.nss || '101022101001'],
-      ['Tahun Pelajaran', db.school.academicYear || '2026/2027'],
-      ['Kepala Sekolah', db.school.principalName || '-'],
-      ['NIP Kepala Sekolah', db.school.principalNip || '-'],
-      ['Bobot Nilai Rapor (%)', db.school.reportWeight || 60],
-      ['Bobot Nilai Ujian Sekolah (%)', db.school.examWeight || 40],
-      ['Standar KKM Kelulusan', db.school.passingKkm || 75.0],
-      ['Tanggal Kelulusan', db.school.graduationDate || '10 Juni 2027'],
-      ['Nomor SK Kelulusan', db.school.skNumber || '-']
-    ];
-    var range5 = ws5.getRange(2, 1, schRows.length, 2);
-    range5.setValues(schRows).setFontFamily('Arial').setFontSize(9)
-      .setBorder(true, true, true, true, true, true, '#CBD5E1', SpreadsheetApp.BorderStyle.SOLID);
+    if (ws5) {
+      var schRows = [
+        ['Nama Satuan Pendidikan', db.school.name || 'SD NEGERI BABELAN KOTA 01'],
+        ['NPSN', db.school.npsn || '20218320'],
+        ['NSS', db.school.nss || '101022101001'],
+        ['Tahun Pelajaran', db.school.academicYear || '2026/2027'],
+        ['Kepala Sekolah', db.school.principalName || '-'],
+        ['NIP Kepala Sekolah', db.school.principalNip || '-'],
+        ['Bobot Nilai Rapor (%)', db.school.reportWeight || 60],
+        ['Bobot Nilai Ujian Sekolah (%)', db.school.examWeight || 40],
+        ['Standar KKM Kelulusan', db.school.passingKkm || 75.0],
+        ['Tanggal Kelulusan', db.school.graduationDate || '10 Juni 2027'],
+        ['Nomor SK Kelulusan', db.school.skNumber || '-']
+      ];
+      if (ws5.getLastRow() > 1) {
+        ws5.getRange(2, 1, ws5.getLastRow() - 1, 2).clearContent();
+      }
+      var range5 = ws5.getRange(2, 1, schRows.length, 2);
+      range5.setValues(schRows).setFontFamily('Arial').setFontSize(9)
+        .setBorder(true, true, true, true, true, true, '#CBD5E1', SpreadsheetApp.BorderStyle.SOLID);
+    }
   }
 }
 
 function syncPropertiesToSheets() {
-  var res = getAllData();
-  if (res.data) {
-    writeAllDataToSheets(res.data);
-    SpreadsheetApp.getUi().alert('Data berhasil disinkronkan ke seluruh sheet!');
-  } else {
-    SpreadsheetApp.getUi().alert('Belum ada data untuk disinkronkan.');
+  try {
+    var res = getAllData();
+    if (res && res.data) {
+      writeAllDataToSheets(res.data);
+      try {
+        SpreadsheetApp.getUi().alert('BERHASIL!\\n\\nSeluruh data siswa, nilai rapor 6 semester, ujian sekolah, dan rekap DKN ijazah telah disinkronkan ke seluruh sheet!');
+      } catch (eUi) {
+        Logger.log('Data berhasil disinkronkan ke seluruh sheet!');
+      }
+    } else {
+      try {
+        SpreadsheetApp.getUi().alert('PEMBERITAHUAN: Belum ada data untuk disinkronkan.');
+      } catch (eUi) {}
+    }
+  } catch (err) {
+    Logger.log('Gagal sync: ' + err.toString());
+    try {
+      SpreadsheetApp.getUi().alert('Gagal menyinkronkan: ' + err.toString());
+    } catch (eUi) {}
+  }
+}
+
+/**
+ * Memperbaiki dan merapikan kolom Tanggal Lahir di sheet DATA_SISWA
+ * Mengubah format error GMT (Fri Jun 06 2014...) menjadi format tanggal rapi (YYYY-MM-DD)
+ */
+function fixBirthDateFormatInSheets() {
+  var ss;
+  try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { return; }
+  if (!ss) return;
+  var ws1 = ss.getSheetByName('DATA_SISWA');
+  if (!ws1 || ws1.getLastRow() < 2) return;
+
+  var lastRow = ws1.getLastRow();
+  var rangeBirth = ws1.getRange(2, 9, lastRow - 1, 1);
+  var vals = rangeBirth.getValues();
+  var displayVals = rangeBirth.getDisplayValues();
+  var fixedVals = [];
+
+  for (var i = 0; i < vals.length; i++) {
+    var raw = vals[i][0];
+    var disp = (displayVals && displayVals[i]) ? displayVals[i][0] : '';
+    var fixed = formatBirthDateCell(raw, disp);
+    fixedVals.push([fixed]);
+  }
+
+  rangeBirth.setNumberFormat('@');
+  rangeBirth.setValues(fixedVals);
+
+  try {
+    SpreadsheetApp.getUi().alert('BERHASIL DIRAPIKAN!\\n\\nSeluruh format tanggal lahir pada lembar DATA_SISWA telah diperbaiki menjadi format tanggal rapi (YYYY-MM-DD).\\nJumlah siswa: ' + fixedVals.length);
+  } catch (eUi) {
+    Logger.log('Format tanggal lahir berhasil dirapikan: ' + fixedVals.length);
   }
 }
 
 function loadSheetsToProperties() {
-  var db = readAllDataFromSheets();
-  if (db) {
-    saveAllData(JSON.stringify(db));
-    SpreadsheetApp.getUi().alert('Data berhasil dimuat dari sheet ke sistem Web App!');
+  try {
+    var db = readAllDataFromSheets();
+    if (db && db.students && db.students.length > 0) {
+      // Simpan hanya ke PropertiesService agar Web App dapat mengakses data.
+      // PENTING: Jangan memanggil fungsi penulisan sheet di sini agar seluruh data & tanggal lahir di spreadsheet tetap 100% utuh tidak berubah!
+      var userProperties = PropertiesService.getUserProperties();
+      userProperties.setProperty('BAKOT01_RAPOR_DB_V2', JSON.stringify(db));
+
+      try {
+        var ui = SpreadsheetApp.getUi();
+        ui.alert('BERHASIL TERKONEKSI & MEMUAT DATA!\\n\\nSebanyak ' + db.students.length + ' data siswa beserta nilai rapor 6 semester, ujian sekolah, dan pengaturan sekolah berhasil dimuat dari Google Sheet ke Web App.\\n\\nData dan format tanggal lahir di Spreadsheet Anda tetap utuh aman sesuai aslinya.');
+      } catch (eUi) {
+        Logger.log('Data berhasil dimuat.');
+      }
+      return {
+        success: true,
+        message: 'Data berhasil dimuat dari Google Spreadsheet (' + db.students.length + ' siswa). Format sheet tidak diubah.',
+        data: db
+      };
+    } else {
+      try {
+        SpreadsheetApp.getUi().alert('PEMBERITAHUAN: Lembar DATA_SISWA masih kosong. Silakan isi data siswa terlebih dahulu di Google Sheets atau sinkronkan dari Web App.');
+      } catch (eUi) {}
+      return { success: false, message: 'Lembar DATA_SISWA kosong.' };
+    }
+  } catch (err) {
+    Logger.log('Error loadSheetsToProperties: ' + err.toString());
+    try {
+      SpreadsheetApp.getUi().alert('Gagal memuat data dari sheet: ' + err.toString());
+    } catch (eUi) {}
+    return { success: false, message: err.toString() };
   }
 }
 
@@ -304,38 +609,138 @@ function readAllDataFromSheets() {
   try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { return null; }
   if (!ss) return null;
 
+  // 1. Baca DATA_SISWA
   var ws1 = ss.getSheetByName('DATA_SISWA');
   if (!ws1 || ws1.getLastRow() < 2) return null;
 
-  var data1 = ws1.getRange(2, 1, ws1.getLastRow() - 1, 13).getValues();
-  var students = data1.map(function(row) {
-    return {
-      id: String(row[1] || row[3]),
-      classRoom: String(row[2]),
-      nis: String(row[3]),
-      nisn: String(row[4]),
-      name: String(row[5]),
-      gender: String(row[6]),
-      birthPlace: String(row[7]),
-      birthDate: String(row[8]),
-      parentName: String(row[9]),
-      address: String(row[10]),
-      phone: String(row[11]),
-      serialNumber: String(row[12])
+  var range1 = ws1.getRange(2, 1, ws1.getLastRow() - 1, 13);
+  var data1 = range1.getValues();
+  var displayData1 = range1.getDisplayValues();
+  var students = [];
+  var studentIdMapByNisn = {};
+
+  data1.forEach(function(row, idx) {
+    if (!row[4] && !row[5]) return; // Lewati jika kosong
+    var sId = String(row[1] || ('std_' + row[4] || row[3]));
+    var rawBirth = row[8];
+    var displayBirth = (displayData1 && displayData1[idx]) ? displayData1[idx][8] : '';
+    var birthDateStr = formatBirthDateCell(rawBirth, displayBirth);
+
+    var student = {
+      id: sId,
+      classRoom: String(row[2] || '6A'),
+      nis: String(row[3] || ''),
+      nisn: String(row[4] || ''),
+      name: String(row[5] || '').toUpperCase(),
+      gender: String(row[6] || 'L'),
+      birthPlace: String(row[7] || 'Bekasi'),
+      birthDate: birthDateStr,
+      parentName: String(row[9] || '-'),
+      address: String(row[10] || '-'),
+      phone: String(row[11] || '-'),
+      serialNumber: String(row[12] || '')
     };
+    students.push(student);
+    if (student.nisn) {
+      studentIdMapByNisn[student.nisn] = sId;
+    }
   });
 
+  if (students.length === 0) return null;
+
+  // 2. Baca RAPOR_6_SEMESTER
+  var grades = {};
+  students.forEach(function(s) { grades[s.id] = {}; });
+  var ws2 = ss.getSheetByName('RAPOR_6_SEMESTER');
+  if (ws2 && ws2.getLastRow() >= 2) {
+    var data2 = ws2.getRange(2, 1, ws2.getLastRow() - 1, 15).getValues();
+    var subKeys = ['pai', 'ppkn', 'bindo', 'mtk', 'ipas', 'sbdp', 'pjok', 'sunda', 'bing'];
+    data2.forEach(function(row) {
+      var nisn = String(row[1]);
+      var sem = String(row[4]);
+      var sId = studentIdMapByNisn[nisn];
+      if (sId && sem) {
+        if (!grades[sId]) grades[sId] = {};
+        var semRecord = {};
+        for (var i = 0; i < subKeys.length; i++) {
+          semRecord[subKeys[i]] = Number(row[5 + i]) || 0;
+        }
+        grades[sId][sem] = semRecord;
+      }
+    });
+  }
+
+  // 3. Baca UJIAN_SEKOLAH
+  var exams = {};
+  students.forEach(function(s) { exams[s.id] = {}; });
+  var ws3 = ss.getSheetByName('UJIAN_SEKOLAH');
+  if (ws3 && ws3.getLastRow() >= 2) {
+    var data3 = ws3.getRange(2, 1, ws3.getLastRow() - 1, 20).getValues();
+    data3.forEach(function(row) {
+      var nisn = String(row[1]);
+      var sId = studentIdMapByNisn[nisn];
+      if (sId) {
+        exams[sId] = {
+          pai: { written: Number(row[4]) || 0, practice: Number(row[5]) || 0, finalScore: Math.round(((Number(row[4]) || 0) * 0.6) + ((Number(row[5]) || 0) * 0.4)) },
+          ppkn: { written: Number(row[6]) || 0, practice: 0, finalScore: Number(row[6]) || 0 },
+          bindo: { written: Number(row[7]) || 0, practice: Number(row[8]) || 0, finalScore: Math.round(((Number(row[7]) || 0) * 0.6) + ((Number(row[8]) || 0) * 0.4)) },
+          mtk: { written: Number(row[9]) || 0, practice: 0, finalScore: Number(row[9]) || 0 },
+          ipas: { written: Number(row[10]) || 0, practice: Number(row[11]) || 0, finalScore: Math.round(((Number(row[10]) || 0) * 0.6) + ((Number(row[11]) || 0) * 0.4)) },
+          sbdp: { written: Number(row[12]) || 0, practice: Number(row[13]) || 0, finalScore: Math.round(((Number(row[12]) || 0) * 0.6) + ((Number(row[13]) || 0) * 0.4)) },
+          pjok: { written: Number(row[14]) || 0, practice: Number(row[15]) || 0, finalScore: Math.round(((Number(row[14]) || 0) * 0.6) + ((Number(row[15]) || 0) * 0.4)) },
+          sunda: { written: Number(row[16]) || 0, practice: Number(row[17]) || 0, finalScore: Math.round(((Number(row[16]) || 0) * 0.6) + ((Number(row[17]) || 0) * 0.4)) },
+          bing: { written: Number(row[18]) || 0, practice: 0, finalScore: Number(row[18]) || 0 }
+        };
+      }
+    });
+  }
+
+  // 4. Baca PENGATURAN_SEKOLAH
+  var school = {
+    name: 'SD NEGERI BABELAN KOTA 01',
+    npsn: '20218320',
+    nss: '101022101001',
+    address: 'Jl. Raya Babelan No. 1',
+    village: 'Babelan Kota',
+    district: 'Kecamatan Babelan',
+    regency: 'Kabupaten Bekasi',
+    province: 'Jawa Barat',
+    postalCode: '17610',
+    academicYear: '2026/2027',
+    principalName: 'SAMSUDIN, S.Pd.SD',
+    principalNip: '198205122008011005',
+    reportWeight: 60,
+    examWeight: 40,
+    passingKkm: 75.0,
+    graduationDate: '10 Juni 2027',
+    skNumber: '421.2/085/SDN-BK01/VI/2027'
+  };
+
+  var ws5 = ss.getSheetByName('PENGATURAN_SEKOLAH');
+  if (ws5 && ws5.getLastRow() >= 2) {
+    var data5 = ws5.getRange(2, 1, ws5.getLastRow() - 1, 2).getValues();
+    data5.forEach(function(r) {
+      var param = String(r[0] || '').toLowerCase();
+      var val = r[1];
+      if (param.indexOf('nama satuan') >= 0) school.name = String(val);
+      if (param.indexOf('npsn') >= 0) school.npsn = String(val);
+      if (param.indexOf('nss') >= 0) school.nss = String(val);
+      if (param.indexOf('tahun pelajaran') >= 0) school.academicYear = String(val);
+      if (param.indexOf('kepala sekolah') >= 0 && param.indexOf('nip') < 0) school.principalName = String(val);
+      if (param.indexOf('nip') >= 0) school.principalNip = String(val);
+      if (param.indexOf('bobot nilai rapor') >= 0) school.reportWeight = Number(val) || 60;
+      if (param.indexOf('bobot nilai ujian') >= 0) school.examWeight = Number(val) || 40;
+      if (param.indexOf('kkm') >= 0) school.passingKkm = Number(val) || 75.0;
+      if (param.indexOf('tanggal kelulusan') >= 0) school.graduationDate = String(val);
+      if (param.indexOf('sk') >= 0) school.skNumber = String(val);
+    });
+  }
+
   return {
-    school: {
-      name: 'SD NEGERI BABELAN KOTA 01',
-      academicYear: '2026/2027',
-      reportWeight: 60,
-      examWeight: 40,
-      passingKkm: 75.0
-    },
+    school: school,
     students: students,
-    grades: {},
-    exams: {}
+    grades: grades,
+    exams: exams
   };
 }
 `;
@@ -371,8 +776,8 @@ export const INDEX_HTML_STANDALONE_SOURCE = `<!DOCTYPE html>
   <!-- Top Navigation Bar (Navy Blue #1E3A8A & Vibrant Blue #2563EB) -->
   <header class="gradient-navy-blue text-white shadow-lg sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between no-print">
     <div class="flex items-center gap-3.5">
-      <div class="w-11 h-11 rounded-xl bg-white/10 border border-white/20 backdrop-blur flex items-center justify-center font-extrabold text-xl shadow-inner text-amber-300">
-        01
+      <div class="w-12 h-12 rounded-xl bg-white/15 border border-white/25 backdrop-blur flex items-center justify-center shadow p-1 overflow-hidden shrink-0">
+        <img src="https://i.ibb.co.com/Xks9PjJv/logo-ops-removebg-preview.png" alt="Logo SDN Babelan Kota 01" class="w-full h-full object-contain filter drop-shadow">
       </div>
       <div>
         <div class="flex items-center gap-2">
@@ -383,7 +788,10 @@ export const INDEX_HTML_STANDALONE_SOURCE = `<!DOCTYPE html>
       </div>
     </div>
     <div class="flex items-center gap-2.5">
-      <span class="text-xs px-3 py-1 bg-white/15 backdrop-blur text-white font-medium rounded-lg border border-white/20">
+      <button onclick="loadDataFromSheetsDirect()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-sm border border-emerald-400/40 transition flex items-center gap-1.5">
+        <span>📥 Muat Data dari Sheet</span>
+      </button>
+      <span class="text-xs px-3 py-1.5 bg-white/15 backdrop-blur text-white font-medium rounded-lg border border-white/20">
         Kelas 6A · 6B · 6C · 6D
       </span>
     </div>
@@ -1043,6 +1451,26 @@ export const INDEX_HTML_STANDALONE_SOURCE = `<!DOCTYPE html>
         alert('File berhasil dibaca (' + json.length + ' baris data).');
       };
       reader.readAsArrayBuffer(file);
+    }
+
+    function loadDataFromSheetsDirect() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(function(res) {
+          if (res && res.success && res.data) {
+            APP_STATE = res.data;
+            alert('✅ Berhasil Terkoneksi & Memuat Data!\\n\\nSebanyak ' + res.data.students.length + ' siswa beserta nilai rapor dan ujian berhasil dimuat dari Google Sheet ke Web App.');
+            refreshUI();
+          } else if (res && res.data) {
+            APP_STATE = res.data;
+            alert('✅ Data berhasil dimuat (' + res.data.students.length + ' siswa).');
+            refreshUI();
+          } else {
+            alert((res && res.message) ? res.message : 'Gagal memuat data dari sheet. Pastikan sheet DATA_SISWA terisi.');
+          }
+        }).readAllDataFromSheets();
+      } else {
+        alert('Fitur ini berjalan saat Web App diakses langsung melalui Google Apps Script (script.google.com).');
+      }
     }
 
     window.addEventListener('DOMContentLoaded', initData);

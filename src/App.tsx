@@ -16,6 +16,7 @@ import {
 } from './types';
 import { getInitialDatabase, INITIAL_STUDENTS, generateInitialGrades, generateInitialExams } from './data/initialData';
 import { exportFullExcelDatabase } from './utils/excel';
+import { cleanBirthDateString } from './utils/calculations';
 
 // Components
 import { Navbar } from './components/Navbar';
@@ -45,6 +46,12 @@ export default function App() {
           const fresh = getInitialDatabase();
           localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
           return fresh;
+        }
+        if (parsed.students && Array.isArray(parsed.students)) {
+          parsed.students = parsed.students.map((s: any) => ({
+            ...s,
+            birthDate: cleanBirthDateString(s.birthDate)
+          }));
         }
         return parsed;
       } catch (e) {
@@ -215,26 +222,30 @@ export default function App() {
 
   // Student CRUD
   const handleSaveStudent = (student: Student) => {
+    const cleanedStudent: Student = {
+      ...student,
+      birthDate: cleanBirthDateString(student.birthDate)
+    };
     setDb((prev) => {
-      const existingIdx = prev.students.findIndex((s) => s.id === student.id);
+      const existingIdx = prev.students.findIndex((s) => s.id === cleanedStudent.id);
       let updatedStudents: Student[];
       if (existingIdx >= 0) {
         updatedStudents = [...prev.students];
-        updatedStudents[existingIdx] = student;
+        updatedStudents[existingIdx] = cleanedStudent;
       } else {
-        updatedStudents = [...prev.students, student];
+        updatedStudents = [...prev.students, cleanedStudent];
       }
 
       // Initialize default grades for new student if missing
       const updatedGrades = { ...prev.grades };
       const updatedExams = { ...prev.exams };
-      if (!updatedGrades[student.id]) {
-        const newGrades = generateInitialGrades([student]);
-        updatedGrades[student.id] = newGrades[student.id];
+      if (!updatedGrades[cleanedStudent.id]) {
+        const newGrades = generateInitialGrades([cleanedStudent]);
+        updatedGrades[cleanedStudent.id] = newGrades[cleanedStudent.id];
       }
-      if (!updatedExams[student.id]) {
-        const newExams = generateInitialExams([student]);
-        updatedExams[student.id] = newExams[student.id];
+      if (!updatedExams[cleanedStudent.id]) {
+        const newExams = generateInitialExams([cleanedStudent]);
+        updatedExams[cleanedStudent.id] = newExams[cleanedStudent.id];
       }
 
       return {

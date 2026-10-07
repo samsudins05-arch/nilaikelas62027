@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Printer, X, Award, CheckCircle, Upload, RotateCcw, Image as ImageIcon } from 'lucide-react';
 import { SchoolProfile, Student, StudentGrades, StudentExams } from '../types';
-import { calculateStudentGraduationSummary, numberToWordsIndonesian } from '../utils/calculations';
+import { calculateStudentGraduationSummary, numberToWordsIndonesian, formatBirthDateIndonesian } from '../utils/calculations';
 
 interface PrintSKLModalProps {
   student: Student;
@@ -176,7 +176,7 @@ export const PrintSKLModal: React.FC<PrintSKLModalProps> = ({
           <div className="grid grid-cols-12 gap-1">
             <span className="col-span-4 font-semibold text-slate-700 print:text-black">Tempat, Tanggal Lahir</span>
             <span className="col-span-1 text-center">:</span>
-            <span className="col-span-7">{student.birthPlace}, {student.birthDate}</span>
+            <span className="col-span-7">{student.birthPlace}, {formatBirthDateIndonesian(student.birthDate)}</span>
           </div>
           <div className="grid grid-cols-12 gap-1">
             <span className="col-span-4 font-semibold text-slate-700 print:text-black">Nama Orang Tua / Wali</span>

@@ -7,6 +7,7 @@ import {
   ExternalLink, 
   UploadCloud, 
   Download, 
+  DownloadCloud,
   Sparkles,
   Layers,
   Database,
@@ -16,6 +17,7 @@ import {
 import { AppDatabase } from '../types';
 import { CODE_GS_SOURCE } from '../utils/gasSourceCodes';
 import { exportFullExcelDatabase } from '../utils/excel';
+import { cleanBirthDateString } from '../utils/calculations';
 
 interface SpreadsheetSyncModalProps {
   isOpen: boolean;
@@ -79,9 +81,74 @@ export const SpreadsheetSyncModal: React.FC<SpreadsheetSyncModalProps> = ({
         setStatusMessage(json.message || 'Gagal menyinkronkan data.');
       }
     } catch (err: any) {
-      // If CORS or deployed as redirect, provide clear helpful guidance
       setSyncStatus('success');
       setStatusMessage('Data berhasil dikirim ke Google Apps Script dan disimpan pada antrean spreadsheet!');
+    }
+  };
+
+  const handleLoadFromSpreadsheet = async () => {
+    if (!gasUrl.trim()) {
+      alert('Silakan masukkan URL Web App Google Apps Script Anda terlebih dahulu.');
+      return;
+    }
+
+    setSyncStatus('syncing');
+    setStatusMessage('Menghubungkan ke Google Spreadsheet & memuat data ke Web App...');
+
+    try {
+      const fetchUrl = gasUrl.trim() + (gasUrl.includes('?') ? '&' : '?') + 'action=loadSheets&t=' + Date.now();
+      const res = await fetch(fetchUrl);
+      const json = await res.json();
+      
+      const targetDb = json.data || (json.students ? json : null);
+      if (targetDb && targetDb.students && targetDb.students.length > 0) {
+        targetDb.students = targetDb.students.map((s: any) => ({
+          ...s,
+          birthDate: cleanBirthDateString(s.birthDate)
+        }));
+        if (onUpdateDb) {
+          onUpdateDb(targetDb);
+        }
+        localStorage.setItem('BAKOT01_RAPOR_DB_V2', JSON.stringify(targetDb));
+        setSyncStatus('success');
+        setStatusMessage(
+          `✅ Berhasil Terkoneksi & Memuat Data! Sebanyak ${targetDb.students.length} data siswa, rapor 6 semester, dan ujian sekolah berhasil dimuat dari Google Spreadsheet ke Web App!`
+        );
+      } else {
+        setSyncStatus('error');
+        setStatusMessage(json.message || 'Data di Google Spreadsheet belum tersedia atau lembar DATA_SISWA masih kosong.');
+      }
+    } catch (err: any) {
+      console.warn('GET failed, attempting fallback POST loadFromSheet:', err);
+      try {
+        const postRes = await fetch(gasUrl.trim(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'loadFromSheet' })
+        });
+        const postJson = await postRes.json();
+        const targetDb = postJson.data || (postJson.students ? postJson : null);
+        if (targetDb && targetDb.students && targetDb.students.length > 0) {
+          targetDb.students = targetDb.students.map((s: any) => ({
+            ...s,
+            birthDate: cleanBirthDateString(s.birthDate)
+          }));
+          if (onUpdateDb) {
+            onUpdateDb(targetDb);
+          }
+          localStorage.setItem('BAKOT01_RAPOR_DB_V2', JSON.stringify(targetDb));
+          setSyncStatus('success');
+          setStatusMessage(
+            `✅ Berhasil Terkoneksi & Memuat Data! Sebanyak ${targetDb.students.length} data siswa beserta nilai berhasil dimuat dari Google Spreadsheet!`
+          );
+          return;
+        }
+      } catch (postErr) {}
+
+      setSyncStatus('error');
+      setStatusMessage(
+        'Gagal terhubung ke Google Apps Script. Pastikan Web App disebarkan (deploy) dengan akses: "Who has access" -> "Anyone / Siapa saja".'
+      );
     }
   };
 
@@ -252,11 +319,11 @@ export const SpreadsheetSyncModal: React.FC<SpreadsheetSyncModalProps> = ({
               </p>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <label className="text-xs font-bold text-slate-700 block">
                 URL Web App Google Apps Script (Deployment Exec URL):
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="url"
                   placeholder="https://script.google.com/macros/s/AKfycb.../exec"
@@ -264,13 +331,28 @@ export const SpreadsheetSyncModal: React.FC<SpreadsheetSyncModalProps> = ({
                   onChange={(e) => handleSaveGasUrl(e.target.value)}
                   className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                 />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                <button
+                  onClick={handleLoadFromSpreadsheet}
+                  disabled={syncStatus === 'syncing'}
+                  className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95 flex items-center gap-2"
+                  title="Muat dan tarik data dari Google Spreadsheet ke aplikasi Web ini"
+                >
+                  <DownloadCloud className="w-4 h-4 text-blue-200" />
+                  <span>{syncStatus === 'syncing' ? 'Menghubungkan & Memuat...' : '📥 Muat Data dari Sheet ke Web App'}</span>
+                </button>
+
                 <button
                   onClick={handleSyncToSpreadsheet}
                   disabled={syncStatus === 'syncing'}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95 flex items-center gap-2"
+                  title="Kirim dan simpan data dari Web App ke Google Spreadsheet"
                 >
-                  <UploadCloud className="w-4 h-4" />
-                  <span>{syncStatus === 'syncing' ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
+                  <UploadCloud className="w-4 h-4 text-emerald-200" />
+                  <span>{syncStatus === 'syncing' ? 'Menyinkronkan...' : '🔄 Simpan Seluruh Data ke Sheet'}</span>
                 </button>
               </div>
             </div>
@@ -282,10 +364,12 @@ export const SpreadsheetSyncModal: React.FC<SpreadsheetSyncModalProps> = ({
                   : 'bg-red-50 text-red-900 border border-red-200'
               }`}>
                 <div className="flex items-center gap-2">
-                  {syncStatus === 'success' ? <Check className="w-4 h-4 text-emerald-700" /> : <AlertCircle className="w-4 h-4 text-red-600" />}
+                  {syncStatus === 'success' ? <Check className="w-4 h-4 text-emerald-700 shrink-0" /> : <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />}
                   <span>{statusMessage}</span>
                 </div>
-                <span className="text-[10px] font-bold opacity-75">Tersimpan</span>
+                <span className="text-[10px] font-bold opacity-75 shrink-0 ml-2">
+                  {syncStatus === 'success' ? 'Terkoneksi' : 'Periksa'}
+                </span>
               </div>
             )}
 
